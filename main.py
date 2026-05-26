@@ -364,21 +364,27 @@ class VoiceAssistant:
                 text_accumulator = ""
                 self.interrupted = False
                 
-                # Transition state to speaking as tokens start feeding
-                self.set_state("SPEAKING")
-                wakeword_buffer = np.zeros(0, dtype=np.float32)
-                self.wake_word_detector.reset()
-                
-                # Purge mic queue to discard any accumulated audio from thinking filler playback
-                while not self.audio_queue.empty():
-                    try:
-                        self.audio_queue.get_nowait()
-                    except queue.Empty:
-                        break
+                # Keep state as THINKING initially. We will transition to SPEAKING
+                # and purge the queue only when the first actual token is received.
+                # This prevents the speaker bleed from thinking fillers and tool call
+                # latency from causing self-interruption.
+                first_token = True
                 
                 for token in token_stream:
                     if self.manual_interrupt:
                         break
+                    
+                    if first_token:
+                        self.set_state("SPEAKING")
+                        # Purge mic queue to discard any accumulated audio from thinking filler playback & tool execution blocking
+                        while not self.audio_queue.empty():
+                            try:
+                                self.audio_queue.get_nowait()
+                            except queue.Empty:
+                                break
+                        wakeword_buffer = np.zeros(0, dtype=np.float32)
+                        self.wake_word_detector.reset()
+                        first_token = False
                     
                     full_response += token
                     text_accumulator += token

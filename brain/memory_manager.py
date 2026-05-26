@@ -61,15 +61,15 @@ class MemoryManager:
 
     def load_recent_context(self, limit=10) -> list:
         """
-        Loads the last 'limit' turns from the current or previous log files for context insertion.
-        Returns a list of dicts: [{'role': 'user'|'assistant', 'content': '...'}]
+        Loads the last 'limit' messages from the current or previous log files for context insertion,
+        maintaining chronological order (oldest turns first, newest turns last).
         """
         turns = []
         md_files = sorted(glob.glob(os.path.join(self.memory_dir, "*.md")))
         if not md_files:
             return turns
 
-        # Read backward from the latest files
+        # Read backward from the latest files (most recent day first)
         for file_path in reversed(md_files):
             if len(turns) >= limit:
                 break
@@ -77,9 +77,12 @@ class MemoryManager:
                 with open(file_path, "r", encoding="utf-8") as f:
                     lines = f.readlines()
                 
-                # Extract conversation turns
+                # Extract conversation turns from the file
+                # In each file, turns are prepended (newest at the top of ## Conversation)
                 in_conversation = False
-                file_turns = []
+                file_turns = []  # list of tuples: (user_msg, prim_msg)
+                current_user = None
+                
                 for line in lines:
                     line = line.strip()
                     if line.startswith("## Conversation"):
@@ -96,15 +99,47 @@ class MemoryManager:
                             role_str = match.group(1)
                             text = match.group(2).strip()
                             role = "user" if role_str == "User" else "assistant"
-                            file_turns.append({"role": role, "content": text})
+                            
+                            if role == "user":
+                                if current_user:
+                                    file_turns.append((current_user, None))
+                                current_user = {"role": "user", "content": text}
+                            else:  # role == "assistant"
+                                if current_user:
+                                    file_turns.append((current_user, {"role": "assistant", "content": text}))
+                                    current_user = None
+                                else:
+                                    file_turns.append((None, {"role": "assistant", "content": text}))
                 
-                # Prepend because we read chronologically within the file, but backwards across files
-                turns = file_turns + turns
+                if current_user:
+                    file_turns.append((current_user, None))
+                
+                # We want the newest turns first (which are at the start of file_turns)
+                # up to the remaining limit.
+                selected_turns = []
+                count = 0
+                for turn in file_turns:
+                    turn_msgs = [m for m in turn if m is not None]
+                    needed = limit - len(turns)
+                    if count + len(turn_msgs) <= needed:
+                        selected_turns.append(turn)
+                        count += len(turn_msgs)
+                    else:
+                        break
+                
+                # Convert the selected turns back to chronological order (oldest of selected turns first)
+                flat_msgs = []
+                for turn in reversed(selected_turns):
+                    for msg in turn:
+                        if msg is not None:
+                            flat_msgs.append(msg)
+                
+                # Prepend the older file's turns before the newer ones
+                turns = flat_msgs + turns
             except Exception as e:
                 logger.error(f"Error reading context from {file_path}: {e}")
 
-        # Slice to get the final limit
-        return turns[-limit:]
+        return turns
 
     def save_turn(self, user_text: str, assistant_text: str):
         """Saves a standard conversation turn to the markdown file."""

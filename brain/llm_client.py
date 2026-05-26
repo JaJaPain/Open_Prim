@@ -46,8 +46,23 @@ class OllamaLLMClient:
         except Exception:
             pass
             
-        # Try extracting JSON object using regex (handles surrounding conversational text)
+        # Check for markdown code blocks (e.g. ```json ... ``` or ``` ... ```)
         import re
+        code_block_match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.DOTALL)
+        if code_block_match:
+            try:
+                data = json.loads(code_block_match.group(1))
+                if isinstance(data, dict) and "name" in data:
+                    return [{
+                        "function": {
+                            "name": data["name"],
+                            "arguments": data.get("arguments", {})
+                        }
+                    }]
+            except Exception:
+                pass
+                
+        # Try extracting JSON object using regex (handles surrounding conversational text)
         matches = re.findall(r"\{[^{}]*\"name\"\s*:[^{}]*\}", text)
         for m in matches:
             try:
@@ -81,6 +96,7 @@ class OllamaLLMClient:
                 
         return []
 
+
     def chat_stream(self, messages: list):
         """
         Sends messages to Ollama and streams the response text.
@@ -101,7 +117,7 @@ class OllamaLLMClient:
                 messages=messages,
                 tools=OLLAMA_TOOLS,
                 stream=True,
-                options={"temperature": 0.0}
+                options={"temperature": 0.1}
             )
             
             full_message = {'role': 'assistant', 'content': '', 'tool_calls': []}

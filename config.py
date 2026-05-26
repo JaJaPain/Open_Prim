@@ -52,7 +52,7 @@ OUTPUT_CHANNELS = 1
 
 # Wake Word Settings
 WAKE_WORD_MODEL = "alexa"  # Fallback built-in model; we can also look for custom ONNX
-WAKE_WORD_THRESHOLD = 0.5
+WAKE_WORD_THRESHOLD = 0.65
 CUSTOM_WAKE_WORD_PATH = os.path.join(MODELS_DIR, "prim.onnx")
 
 # VAD Settings

@@ -58,7 +58,7 @@ class WakeWordDetector:
             except Exception as e:
                 logger.error(f"Failed to reset wake word model: {e}")
 
-    def process(self, audio_chunk_int16: np.ndarray) -> bool:
+    def process(self, audio_chunk_int16: np.ndarray, threshold: float = None) -> bool:
         """
         Processes a 1280-sample chunk of 16-bit 16kHz PCM.
         Returns True if the wake word is detected.
@@ -72,11 +72,13 @@ class WakeWordDetector:
             predictions = self.model.predict(audio_chunk_int16)
             score = predictions.get(self.model_name, 0.0)
             
-            if score >= self.threshold:
-                logger.info(f"Wake word '{self.model_name}' detected! Score: {score:.3f}")
+            t = threshold if threshold is not None else self.threshold
+            if score >= t:
+                logger.info(f"Wake word '{self.model_name}' detected! Score: {score:.3f} (threshold {t:.2f})")
                 return True
                 
             return False
         except Exception as e:
             logger.error(f"Error in wake word processing: {e}")
             return False
+

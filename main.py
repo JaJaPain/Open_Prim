@@ -389,7 +389,7 @@ class VoiceAssistant:
                                 wakeword_buffer = wakeword_buffer[1280:]
                                 
                                 ww_chunk_int16 = (ww_chunk * 32767.0).astype(np.int16)
-                                if self.wake_word_detector.process(ww_chunk_int16):
+                                if self.wake_word_detector.process(ww_chunk_int16, threshold=0.88):
                                     logger.info("Wake word override detected during generation! Interrupting...")
                                     self.interrupted = True
                                     break
@@ -435,7 +435,7 @@ class VoiceAssistant:
                             wakeword_buffer = wakeword_buffer[1280:]
                             
                             ww_chunk_int16 = (ww_chunk * 32767.0).astype(np.int16)
-                            if self.wake_word_detector.process(ww_chunk_int16):
+                            if self.wake_word_detector.process(ww_chunk_int16, threshold=0.88):
                                 logger.info("Wake word override detected during audio playback! Interrupting...")
                                 self.interrupted = True
                                 break

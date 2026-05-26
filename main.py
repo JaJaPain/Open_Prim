@@ -369,6 +369,13 @@ class VoiceAssistant:
                 wakeword_buffer = np.zeros(0, dtype=np.float32)
                 self.wake_word_detector.reset()
                 
+                # Purge mic queue to discard any accumulated audio from thinking filler playback
+                while not self.audio_queue.empty():
+                    try:
+                        self.audio_queue.get_nowait()
+                    except queue.Empty:
+                        break
+                
                 for token in token_stream:
                     if self.manual_interrupt:
                         break

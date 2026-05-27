@@ -149,19 +149,27 @@ class SkillCreatorWindow(ctk.CTkToplevel):
         self.input_frame.grid(row=2, column=0, padx=20, pady=(0, 5), sticky="ew")
         self.input_frame.grid_columnconfigure(0, weight=1)
         
-        self.chat_entry = ctk.CTkEntry(
+        self.chat_entry = ctk.CTkTextbox(
             self.input_frame,
-            placeholder_text="Tell the developer assistant what skill you want to create...",
             font=ctk.CTkFont(size=13),
             fg_color="#2D3748",
             text_color="#F7FAFC",
-            placeholder_text_color="#718096",
             border_color="#4A5568",
+            border_width=1,
             corner_radius=8,
-            height=38
+            height=70,
+            wrap="word"
         )
         self.chat_entry.grid(row=0, column=0, padx=(10, 5), pady=10, sticky="ew")
         self.chat_entry.bind("<Return>", self._on_send_click)
+        
+        # Placeholder behavior
+        self.placeholder = "Tell the developer assistant what skill you want to create..."
+        self.chat_entry.insert("1.0", self.placeholder)
+        self.chat_entry.configure(text_color="#718096")
+        
+        self.chat_entry.bind("<FocusIn>", self._on_focus_in)
+        self.chat_entry.bind("<FocusOut>", self._on_focus_out)
         
         self.send_btn = ctk.CTkButton(
             self.input_frame,
@@ -295,16 +303,29 @@ class SkillCreatorWindow(ctk.CTkToplevel):
                 self._update_status("Deletion failed.")
                 messagebox.showerror("Deletion Error", res.get("error", "Unknown error occurred."), parent=self)
 
+    def _on_focus_in(self, event):
+        val = self.chat_entry.get("1.0", "end-1c").strip()
+        if val == self.placeholder:
+            self.chat_entry.delete("1.0", "end")
+            self.chat_entry.configure(text_color="#F7FAFC")
+
+    def _on_focus_out(self, event):
+        val = self.chat_entry.get("1.0", "end-1c").strip()
+        if not val:
+            self.chat_entry.insert("1.0", self.placeholder)
+            self.chat_entry.configure(text_color="#718096")
+
     def _on_send_click(self, event=None):
-        text = self.chat_entry.get().strip()
-        if not text:
-            return
+        text = self.chat_entry.get("1.0", "end-1c").strip()
+        if not text or text == self.placeholder:
+            return "break" if event else None
             
-        self.chat_entry.delete(0, "end")
+        self.chat_entry.delete("1.0", "end")
         self._append_message("You", text)
         self.chat_history.append({"role": "user", "content": text})
         
         self._send_chat_to_llm()
+        return "break" if event else None
 
     def _send_chat_to_llm(self):
         """Starts a background thread to call Ollama chat stream to keep the GUI responsive."""
@@ -372,8 +393,15 @@ class SkillCreatorWindow(ctk.CTkToplevel):
             self.after(0, lambda: self._append_message("System", f"Error querying local model: {e}"))
             self.after(0, lambda: self._update_status("Ready"))
         finally:
-            self.after(0, lambda: self.send_btn.configure(state="normal"))
-            self.after(0, lambda: self.chat_entry.configure(state="normal"))
+            self.after(0, self._restore_entry_state)
+
+    def _restore_entry_state(self):
+        self.send_btn.configure(state="normal")
+        self.chat_entry.configure(state="normal")
+        val = self.chat_entry.get("1.0", "end-1c").strip()
+        if not val:
+            self.chat_entry.insert("1.0", self.placeholder)
+            self.chat_entry.configure(text_color="#718096")
 
     # ----------------- Thread-Safe GUI Helpers -----------------
     

@@ -296,6 +296,7 @@ class VoiceAssistant:
             self.manual_interrupt = False
         else:
             logger.info("Typed input interaction complete. Recording log turn.")
+            messages.append({"role": "assistant", "content": full_response})
             turn_messages = messages[num_orig_messages - 1:]
             self.memory_manager.save_turn_messages(turn_messages)
             self.dashboard.add_transcript("Prim", full_response)
@@ -629,6 +630,7 @@ class VoiceAssistant:
                 else:
                     # Normal completion
                     logger.info("Interaction complete. Recording log turn.")
+                    messages.append({"role": "assistant", "content": full_response})
                     turn_messages = messages[num_orig_messages - 1:]
                     self.memory_manager.save_turn_messages(turn_messages)
                     self.dashboard.add_transcript("Prim", full_response)

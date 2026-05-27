@@ -212,6 +212,7 @@ Rules:
 2. If the user wants to alter an existing skill, they will provide the current file content. Modify only what is requested while keeping the rest intact.
 3. Be friendly and conversational, but always include the xml block with the filename and code.
 4. CRITICAL TYPE SAFETY: Always cast incoming arguments from kwargs to expected Python types (e.g. int, float, or str) inside execute(). Local LLMs/Ollama often output numerical parameters as string types (e.g., "5" instead of 5), which can cause math operations like multiplication (e.g. "5" * 60) to fail or produce silent crashes in background threads.
+5. CRITICAL IMPORTS: Ensure you import all modules you use (e.g. `import time`, `import random`, `import sys`) at the top of the skill file. Do not assume any standard library modules are pre-imported.
 """
 
 

@@ -249,19 +249,26 @@ class PrimDashboard:
         self.input_frame.grid(row=4, column=0, padx=20, pady=(0, 15), sticky="ew")
         self.input_frame.grid_columnconfigure(0, weight=1)
         
-        self.text_entry = ctk.CTkEntry(
+        self.text_entry = ctk.CTkTextbox(
             self.input_frame,
-            placeholder_text="Type a question for Prim...",
             font=ctk.CTkFont(size=13),
             fg_color="#2D3748",
             text_color="#F7FAFC",
-            placeholder_text_color="#718096",
             border_color="#4A5568",
+            border_width=1,
             corner_radius=8,
-            height=38
+            height=70,
+            wrap="word"
         )
         self.text_entry.grid(row=0, column=0, padx=(10, 5), pady=10, sticky="ew")
         self.text_entry.bind("<Return>", self._on_text_submit)
+        
+        # Placeholder behavior
+        self.placeholder = "Type a question for Prim..."
+        self.text_entry.insert("1.0", self.placeholder)
+        self.text_entry.configure(text_color="#718096")
+        self.text_entry.bind("<FocusIn>", self._on_focus_in)
+        self.text_entry.bind("<FocusOut>", self._on_focus_out)
         
         self.send_btn = ctk.CTkButton(
             self.input_frame,
@@ -315,15 +322,34 @@ class PrimDashboard:
         if self.create_skills_callback:
             self.create_skills_callback()
 
+    def _on_focus_in(self, event):
+        val = self.text_entry.get("1.0", "end-1c").strip()
+        if val == self.placeholder:
+            self.text_entry.delete("1.0", "end")
+            self.text_entry.configure(text_color="#F7FAFC")
+
+    def _on_focus_out(self, event):
+        val = self.text_entry.get("1.0", "end-1c").strip()
+        if not val:
+            self.text_entry.insert("1.0", self.placeholder)
+            self.text_entry.configure(text_color="#718096")
+
     def _on_text_submit(self, event=None):
         """Handles Enter key press or Send button click for typed text input."""
-        text = self.text_entry.get().strip()
-        if not text:
-            return
-        self.text_entry.delete(0, "end")
+        text = self.text_entry.get("1.0", "end-1c").strip()
+        if not text or text == self.placeholder:
+            return "break" if event else None
+            
+        self.text_entry.delete("1.0", "end")
         logger.info(f"Text input submitted: '{text}'")
         if self.text_input_callback:
             self.text_input_callback(text)
+            
+        # Clear focus and reset placeholder
+        self.root.focus_set()
+        self._on_focus_out(None)
+        
+        return "break" if event else None
 
     def _on_mode_switch(self):
         import os

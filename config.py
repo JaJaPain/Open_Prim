@@ -199,16 +199,23 @@ Example structure for a timer:
                 self.active_dashboard.add_transcript("Prim (Timer)", f"({announcement})")
                 self.active_dashboard.add_log(announcement)
 
-        # Convert minutes to seconds and start timer in background
-        # CRITICAL: Always cast tool arguments to expected Python types (e.g. float or int)
-        # since Ollama/local LLMs frequently pass integers/numbers as string types (e.g. "5").
+        # Convert duration to seconds and start timer in background
+        # CRITICAL: Always handle None values and cast arguments safely.
+        # Local LLMs often pass numbers as string types, or omit optional parameters entirely.
         try:
-            time_minutes_val = float(time_minutes)
+            # Safely fetch from kwargs with a fallback default (never pass None directly to float())
+            duration_min_raw = kwargs.get("duration_minutes")
+            duration_sec_raw = kwargs.get("duration_seconds")
+            
+            duration_minutes = float(duration_min_raw) if duration_min_raw is not None else 0.0
+            duration_seconds = float(duration_sec_raw) if duration_sec_raw is not None else 0.0
         except (ValueError, TypeError):
-            return "Error: Invalid duration."
+            return "Error: Invalid duration numbers."
+
+        total_duration = duration_minutes * 60 + duration_seconds
 
         import threading
-        timer_thread = threading.Timer(time_minutes_val * 60, alert)
+        timer_thread = threading.Timer(total_duration, alert)
         timer_thread.start()
 ```
 
@@ -216,7 +223,7 @@ Rules:
 1. Ensure the code is syntactically valid and completely self-contained.
 2. If the user wants to alter an existing skill, they will provide the current file content. Modify only what is requested while keeping the rest intact.
 3. Be friendly and conversational, but always include the xml block with the filename and code.
-4. CRITICAL TYPE SAFETY: Always cast incoming arguments from kwargs to expected Python types (e.g. int, float, or str) inside execute(). Local LLMs/Ollama often output numerical parameters as string types (e.g., "5" instead of 5), which can cause math operations like multiplication (e.g. "5" * 60) to fail or produce silent crashes in background threads.
+4. CRITICAL TYPE SAFETY & OPTIONAL ARGUMENTS: Always cast incoming arguments from kwargs to expected Python types (e.g. int, float, or str) inside execute(). Local LLMs/Ollama often pass numerical parameters as string types (e.g., "5"), or pass None / omit optional parameters entirely. You MUST handle None/missing arguments by checking before casting (e.g., use a fallback default like `val = float(raw) if raw is not None else 0.0`), as passing None directly to float() or int() will raise a TypeError and crash the background timer or tool execution.
 5. CRITICAL IMPORTS: Ensure you import all modules you use (e.g. `import time`, `import random`, `import sys`) at the top of the skill file. Do not assume any standard library modules are pre-imported.
 """
 

@@ -40,16 +40,16 @@ class TimerSkill(BaseSkill):
 
     def execute(self, **kwargs) -> str:
         duration_minutes = kwargs.get("duration_minutes")
-        duration_seconds = kwargs.get("duration_seconds", 0)
-
-        if not duration_minutes and not duration_seconds:
-            return "Please specify a duration for the timer."
+        duration_seconds = kwargs.get("duration_seconds")
 
         try:
-            duration_minutes = float(duration_minutes)
-            duration_seconds = float(duration_seconds)
+            duration_minutes = float(duration_minutes) if duration_minutes is not None else 0.0
+            duration_seconds = float(duration_seconds) if duration_seconds is not None else 0.0
         except (ValueError, TypeError):
             return "Invalid duration. Please provide valid numbers of minutes and seconds."
+
+        if duration_minutes == 0.0 and duration_seconds == 0.0:
+            return "Please specify a duration greater than zero."
 
         total_duration = duration_minutes * 60 + duration_seconds
 

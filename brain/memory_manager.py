@@ -104,7 +104,7 @@ class MemoryManager:
                             msg = {"role": "user", "content": user_match.group(2).strip()}
                             is_user = True
                         elif tool_call_match:
-                            tc_text = tool_call_match.group(3).strip()
+                            tc_text = tool_call_match.group(2).strip()
                             try:
                                 import json
                                 tc_data = json.loads(tc_text)

@@ -97,7 +97,7 @@ class OllamaLLMClient:
         return []
 
 
-    def chat_stream(self, messages: list, mode: str = "ASSISTANT"):
+    def chat_stream(self, messages: list, mode: str = "ASSISTANT", tool_depth: int = 0):
         """
         Sends messages to Ollama and streams the response text.
         If the model requests a tool/function call, runs the function and 
@@ -169,7 +169,12 @@ class OllamaLLMClient:
             
             # If the model requested tool calls, execute them and recursively get final conversation response
             if full_message["tool_calls"]:
-                logger.info(f"Executing {len(full_message['tool_calls'])} tool calls...")
+                if tool_depth >= 8:
+                    logger.warning("Maximum tool execution depth reached (8). Aborting to prevent infinite loop.")
+                    yield "\n\n*(Self-Correction: I have hit the maximum tool execution depth limit of 8. It seems I am stuck in an execution loop. Please check the workspace structure and guide me on the next step.)*"
+                    return
+
+                logger.info(f"Executing {len(full_message['tool_calls'])} tool calls (depth {tool_depth})...")
                 # Append the assistant's tool-call request to the conversation history
                 messages.append(full_message)
                 
@@ -197,7 +202,7 @@ class OllamaLLMClient:
                     })
                 
                 # Recursive call to stream final summary
-                yield from self.chat_stream(messages, mode=mode)
+                yield from self.chat_stream(messages, mode=mode, tool_depth=tool_depth + 1)
                 
         except Exception as e:
             logger.error(f"Error during Ollama chat: {e}")

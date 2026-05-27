@@ -240,6 +240,8 @@ Since the user is working on code in this directory:
 - Maintain formatting and cleanliness.
 - If the user asks to modify or read files, you MUST use the appropriate workspace tools: 'list_workspace_files', 'read_workspace_file', or 'write_workspace_file'.
 - If the user asks to execute a command, install python packages (e.g. pip), run files, or execute tests, you MUST use the 'run_terminal_command' tool.
+- Before executing a script or command, you MUST ensure that the script or target file actually exists in the workspace. Call 'list_workspace_files' first to understand the workspace structure.
+- Never run a script that does not exist in the workspace; if you need to run a script, create it first using the 'write_workspace_file' tool.
 - When making modifications, explain what changes you are planning to make, make the tool calls, and then summarize the results.
 
 TOOL CALL FORMAT:

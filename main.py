@@ -65,6 +65,7 @@ class VoiceAssistant:
     def __init__(self):
         # Queues and events
         self.audio_queue = queue.Queue()
+        self.text_input_queue = queue.Queue()  # Queue for typed text input from the GUI
         self.stop_event = threading.Event()
         
         # State indicators
@@ -81,7 +82,8 @@ class VoiceAssistant:
         # Setup UI dashboard with callback mappings
         self.dashboard = PrimDashboard(
             interrupt_callback=self.trigger_manual_interrupt,
-            close_callback=self.shutdown
+            close_callback=self.shutdown,
+            text_input_callback=self._handle_text_input
         )
         
         # Route logger records to GUI console
@@ -147,6 +149,10 @@ class VoiceAssistant:
         """Triggered when the user clicks the INTERRUPT button in the GUI."""
         self.manual_interrupt = True
 
+    def _handle_text_input(self, text: str):
+        """Called from the GUI thread when user submits typed text. Queues it for the orchestration loop."""
+        self.text_input_queue.put(text)
+
     def _play_thinking_filler(self, user_text: str):
         """Plays a brief spoken filler word based on user query keywords to reduce perceived latency."""
         import random
@@ -188,6 +194,97 @@ class VoiceAssistant:
             logger.info(f"Playing thinking filler: '{filler}'")
             self.dashboard.add_transcript("Prim (Thinking)", f"({filler})")
             self.synthesizer.generate_and_play(filler)
+
+    def _process_typed_input(self, user_text: str, sentence_end_re, wakeword_buffer):
+        """Handles typed text input: skips wake word/VAD/Whisper and goes straight to LLM → TTS."""
+        logger.info(f"Processing typed input: '{user_text}'")
+        self.dashboard.add_transcript("User", user_text)
+        self.current_user_query = user_text
+        
+        self.set_state("THINKING")
+        
+        # Play thinking filler if query requires tool execution
+        self._play_thinking_filler(user_text)
+        
+        # Build context messages and request LLM
+        self.dashboard.add_log("Querying Qwen2.5 / Searching tools...")
+        messages = self.llm_client.build_messages(user_text, self.memory_manager)
+        
+        # Get the stream generator from LLM
+        token_stream = self.llm_client.chat_stream(messages)
+        
+        # Stream iteration logic
+        self.spoken_text_buffer = ""
+        full_response = ""
+        text_accumulator = ""
+        self.interrupted = False
+        first_token = True
+        
+        for token in token_stream:
+            if self.manual_interrupt:
+                break
+            
+            if first_token:
+                self.set_state("SPEAKING")
+                # Purge mic queue
+                while not self.audio_queue.empty():
+                    try:
+                        self.audio_queue.get_nowait()
+                    except queue.Empty:
+                        break
+                self.wake_word_detector.reset()
+                first_token = False
+            
+            full_response += token
+            text_accumulator += token
+            
+            # Sentence-level text chunking for smoother TTS pacing
+            sentences = sentence_end_re.split(text_accumulator)
+            
+            if len(sentences) > 2:
+                for i in range(0, len(sentences) - 2, 2):
+                    sentence_part = sentences[i] + sentences[i+1]
+                    sentence_part = sentence_part.strip()
+                    if sentence_part:
+                        self.synthesizer.generate_and_play(sentence_part)
+                        self.spoken_text_buffer += " " + sentence_part
+                
+                text_accumulator = sentences[-1]
+            elif len(text_accumulator.split()) > 15:
+                words = text_accumulator.split()
+                chunk_to_speak = " ".join(words[:12])
+                self.synthesizer.generate_and_play(chunk_to_speak)
+                self.spoken_text_buffer += " " + chunk_to_speak
+                text_accumulator = " ".join(words[12:])
+        
+        # Speak remaining trailing tokens
+        if text_accumulator.strip() and not self.interrupted and not self.manual_interrupt:
+            self.synthesizer.generate_and_play(text_accumulator.strip())
+            self.spoken_text_buffer += " " + text_accumulator.strip()
+        
+        # Wait for TTS audio to complete playing
+        while self.synthesizer.is_playing() and not self.interrupted and not self.manual_interrupt:
+            time.sleep(0.05)
+        
+        # Handle interruption or normal completion
+        if self.interrupted or self.manual_interrupt:
+            self._handle_interruption()
+            self.manual_interrupt = False
+        else:
+            logger.info("Typed input interaction complete. Recording log turn.")
+            self.memory_manager.save_turn(self.current_user_query, full_response)
+            self.dashboard.add_transcript("Prim", full_response)
+            time.sleep(0.5)
+        
+        self.set_state("SLEEPING")
+        self.wake_word_detector.reset()
+        # Purge mic queue and set cooldown
+        while not self.audio_queue.empty():
+            try:
+                self.audio_queue.get_nowait()
+            except queue.Empty:
+                break
+        self.sleep_cooldown_until = time.time() + 2.0
 
     def _orchestration_loop(self):
         """Core state machine looping in background."""
@@ -240,6 +337,16 @@ class VoiceAssistant:
                 self.vad.reset_states()
                 wakeword_buffer = np.zeros(0, dtype=np.float32)
                 continue
+
+            # Check for typed text input from the GUI
+            try:
+                typed_text = self.text_input_queue.get_nowait()
+                if typed_text:
+                    self._process_typed_input(typed_text, sentence_end_re, wakeword_buffer)
+                    wakeword_buffer = np.zeros(0, dtype=np.float32)
+                    continue
+            except queue.Empty:
+                pass
 
             try:
                 # Retrieve float32 audio chunk (already processed by AGC)

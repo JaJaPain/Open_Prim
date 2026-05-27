@@ -18,9 +18,10 @@ if ctk is not None:
     ctk.set_default_color_theme("blue")
 
 class PrimDashboard:
-    def __init__(self, interrupt_callback=None, close_callback=None):
+    def __init__(self, interrupt_callback=None, close_callback=None, text_input_callback=None):
         self.interrupt_callback = interrupt_callback
         self.close_callback = close_callback
+        self.text_input_callback = text_input_callback
         self.root = None
         
         # State Colors
@@ -43,8 +44,8 @@ class PrimDashboard:
         # Initialize main window
         self.root = ctk.CTk()
         self.root.title("Project Prim - Local Voice Assistant")
-        self.root.geometry("900x650")
-        self.root.minsize(750, 500)
+        self.root.geometry("900x700")
+        self.root.minsize(750, 550)
         self.root.protocol("WM_DELETE_WINDOW", self._on_closing)
         
         # Style layout grid
@@ -161,8 +162,40 @@ class PrimDashboard:
             text_color="#F7FAFC",
             font=ctk.CTkFont(size=13)
         )
-        self.transcript_textbox.grid(row=3, column=0, padx=20, pady=(0, 20), sticky="nsew")
+        self.transcript_textbox.grid(row=3, column=0, padx=20, pady=(0, 10), sticky="nsew")
         self.transcript_textbox.configure(state="disabled")
+        
+        # ----------------- TEXT INPUT BAR -----------------
+        self.input_frame = ctk.CTkFrame(self.main_area, corner_radius=10, fg_color="#1E1E24")
+        self.input_frame.grid(row=4, column=0, padx=20, pady=(0, 15), sticky="ew")
+        self.input_frame.grid_columnconfigure(0, weight=1)
+        
+        self.text_entry = ctk.CTkEntry(
+            self.input_frame,
+            placeholder_text="Type a question for Prim...",
+            font=ctk.CTkFont(size=13),
+            fg_color="#2D3748",
+            text_color="#F7FAFC",
+            placeholder_text_color="#718096",
+            border_color="#4A5568",
+            corner_radius=8,
+            height=38
+        )
+        self.text_entry.grid(row=0, column=0, padx=(10, 5), pady=10, sticky="ew")
+        self.text_entry.bind("<Return>", self._on_text_submit)
+        
+        self.send_btn = ctk.CTkButton(
+            self.input_frame,
+            text="Send",
+            command=self._on_text_submit,
+            font=ctk.CTkFont(size=13, weight="bold"),
+            fg_color="#00B4D8",
+            hover_color="#0096B7",
+            corner_radius=8,
+            width=70,
+            height=38
+        )
+        self.send_btn.grid(row=0, column=1, padx=(0, 10), pady=10)
         
         # Log opening message
         self.add_log("Dashboard UI started. Connecting to background voice services...")
@@ -175,6 +208,16 @@ class PrimDashboard:
         logger.info("Interrupt button clicked on dashboard GUI.")
         if self.interrupt_callback:
             self.interrupt_callback()
+
+    def _on_text_submit(self, event=None):
+        """Handles Enter key press or Send button click for typed text input."""
+        text = self.text_entry.get().strip()
+        if not text:
+            return
+        self.text_entry.delete(0, "end")
+        logger.info(f"Text input submitted: '{text}'")
+        if self.text_input_callback:
+            self.text_input_callback(text)
 
     def _on_closing(self):
         """Cleans up threads when closing the window."""
@@ -238,3 +281,4 @@ class PrimDashboard:
             self.transcript_textbox.insert("end", f"Prim: {text}\n\n", "prim_tag")
         self.transcript_textbox.see("end")
         self.transcript_textbox.configure(state="disabled")
+

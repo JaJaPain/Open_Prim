@@ -9,7 +9,7 @@ class CheckStocks(BaseSkill):
 
     @property
     def description(self) -> str:
-        return "Checks the current status of specified stocks. Provide a list of stock symbols separated by commas."
+        return "Checks the current status of specified stocks. If no stock symbols are specified, it checks the default watchlist (SOFI, PLTR)."
 
     @property
     def parameters(self) -> dict:
@@ -18,10 +18,9 @@ class CheckStocks(BaseSkill):
             "properties": {
                 "stocks": {
                     "type": "string",
-                    "description": "Comma-separated list of stock symbols (e.g., AMZN, PLTR)"
+                    "description": "Optional comma-separated list of stock symbols (e.g., AMZN, PLTR). If omitted, defaults to SOFI, PLTR."
                 }
-            },
-            "required": ["stocks"]
+            }
         }
 
     @property
@@ -36,7 +35,7 @@ class CheckStocks(BaseSkill):
         try:
             stocks = kwargs.get("stocks")
             if not stocks:
-                return "Error: No stocks provided."
+                stocks = "SOFI, PLTR"
 
             stock_list = [stock.strip().upper() for stock in stocks.split(",")]
             base_url = "https://query1.finance.yahoo.com/v8/finance/chart/{}"

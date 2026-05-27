@@ -378,6 +378,18 @@ class VoiceAssistant:
             except queue.Empty:
                 continue
 
+            # Discard microphone input while the speech synthesizer is active in the background
+            # (e.g. playing timer alerts, alarms, or notifications). This prevents the wake word
+            # or VAD from falsely triggering on the assistant's own voice.
+            if self.synthesizer and self.synthesizer.is_playing():
+                if self.state == "LISTENING":
+                    recorded_audio = []
+                    speech_started = False
+                    silent_chunks = 0
+                    consecutive_user_speech_frames = 0
+                wakeword_buffer = np.zeros(0, dtype=np.float32)
+                continue
+
             # State Machine: SLEEPING (Listening for Wake Word)
             if self.state == "SLEEPING":
                 # Post-speech cooldown: consume mic audio but skip wake word detection

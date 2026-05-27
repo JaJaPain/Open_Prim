@@ -1,6 +1,6 @@
 import logging
 import config
-from brain.tools import OLLAMA_TOOLS, TOOLS_REGISTRY
+from skills import OLLAMA_TOOLS, TOOLS_REGISTRY
 
 # Try importing ollama. If not installed yet, handle gracefully.
 try:
@@ -201,11 +201,19 @@ class OllamaLLMClient:
         Builds the message list including system prompts,
         loaded preferences, and conversation history.
         """
+        from skills import SKILL_INSTANCES
+
         # Load learned preferences from daily memory files
         preferences = memory_manager.load_preferences()
         
-        # Build System Prompt
-        system_prompt = config.LLM_SYSTEM_PROMPT
+        # Build tool descriptions dynamically
+        tool_lines = []
+        for i, skill in enumerate(SKILL_INSTANCES.values(), 1):
+            tool_lines.append(f"{i}. '{skill.name}': {skill.description}")
+        tool_descriptions = "\n".join(tool_lines)
+        
+        # Format the system prompt template
+        system_prompt = config.LLM_SYSTEM_PROMPT_TEMPLATE.format(tool_descriptions=tool_descriptions)
         if preferences:
             system_prompt += f"\n{preferences}"
             

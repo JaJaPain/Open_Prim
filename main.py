@@ -156,39 +156,15 @@ class VoiceAssistant:
     def _play_thinking_filler(self, user_text: str):
         """Plays a brief spoken filler word based on user query keywords to reduce perceived latency."""
         import random
+        from skills import SKILL_INSTANCES
         
         user_text_lower = user_text.lower()
-        
-        weather_fillers = [
-            "Checking the weather for you.",
-            "Let me check the weather forecast.",
-            "One second, checking the weather conditions."
-        ]
-        stock_fillers = [
-            "Checking that stock price now.",
-            "Let me fetch the latest market price.",
-            "Looking up the stock details."
-        ]
-        news_fillers = [
-            "Let me check the latest news headlines.",
-            "Fetching the latest news updates for you.",
-            "Looking up the news."
-        ]
-        memory_fillers = [
-            "Got it, saving that to memory.",
-            "Writing that down for you.",
-            "One moment, remembering that."
-        ]
-        
         filler = None
-        if any(w in user_text_lower for w in ["weather", "forecast", "rain", "temperature", "temp", "snow"]):
-            filler = random.choice(weather_fillers)
-        elif any(w in user_text_lower for w in ["stock", "share", "price", "ticker", "market"]):
-            filler = random.choice(stock_fillers)
-        elif any(w in user_text_lower for w in ["news", "headline", "headlines", "article", "update"]):
-            filler = random.choice(news_fillers)
-        elif any(w in user_text_lower for w in ["remember", "save", "learn", "forget"]):
-            filler = random.choice(memory_fillers)
+        for skill in SKILL_INSTANCES.values():
+            if skill.filler_keywords and any(w in user_text_lower for w in skill.filler_keywords):
+                if skill.filler_phrases:
+                    filler = random.choice(skill.filler_phrases)
+                    break
             
         if filler:
             logger.info(f"Playing thinking filler: '{filler}'")

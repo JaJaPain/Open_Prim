@@ -18,11 +18,15 @@ if ctk is not None:
     ctk.set_default_color_theme("blue")
 
 class PrimDashboard:
-    def __init__(self, interrupt_callback=None, close_callback=None, text_input_callback=None):
+    def __init__(self, interrupt_callback=None, close_callback=None, text_input_callback=None, mute_mic_callback=None, mute_voice_callback=None):
         self.interrupt_callback = interrupt_callback
         self.close_callback = close_callback
         self.text_input_callback = text_input_callback
+        self.mute_mic_callback = mute_mic_callback
+        self.mute_voice_callback = mute_voice_callback
         self.root = None
+        self.mic_muted = False
+        self.voice_muted = False
         
         # State Colors
         self.status_colors = {
@@ -56,7 +60,7 @@ class PrimDashboard:
         # ----------------- SIDEBAR PANEL (Status) -----------------
         self.sidebar = ctk.CTkFrame(self.root, width=220, corner_radius=15, fg_color="#131317")
         self.sidebar.grid(row=0, column=0, padx=15, pady=15, sticky="nsew")
-        self.sidebar.grid_rowconfigure(4, weight=1)
+        self.sidebar.grid_rowconfigure(6, weight=1)
         
         # Title
         self.title_label = ctk.CTkLabel(
@@ -109,6 +113,32 @@ class PrimDashboard:
         )
         self.interrupt_btn.grid(row=3, column=0, padx=15, pady=20, sticky="ew")
         
+        # Mute Mic Button
+        self.mute_mic_btn = ctk.CTkButton(
+            self.sidebar,
+            text="MUTE MIC",
+            command=self._on_mute_mic_click,
+            font=ctk.CTkFont(size=13, weight="bold"),
+            fg_color="#2D3748",
+            hover_color="#4A5568",
+            corner_radius=10,
+            height=36
+        )
+        self.mute_mic_btn.grid(row=4, column=0, padx=15, pady=(0, 10), sticky="ew")
+
+        # Mute Voice Button
+        self.mute_voice_btn = ctk.CTkButton(
+            self.sidebar,
+            text="MUTE VOICE",
+            command=self._on_mute_voice_click,
+            font=ctk.CTkFont(size=13, weight="bold"),
+            fg_color="#2D3748",
+            hover_color="#4A5568",
+            corner_radius=10,
+            height=36
+        )
+        self.mute_voice_btn.grid(row=5, column=0, padx=15, pady=(0, 10), sticky="ew")
+        
         # Audio input indicator placeholder
         self.vad_label = ctk.CTkLabel(
             self.sidebar,
@@ -116,7 +146,7 @@ class PrimDashboard:
             font=ctk.CTkFont(family="Courier", size=12),
             text_color="#718096"
         )
-        self.vad_label.grid(row=5, column=0, padx=10, pady=20, sticky="s")
+        self.vad_label.grid(row=7, column=0, padx=10, pady=20, sticky="s")
         
         # ----------------- MAIN CONTENT AREA -----------------
         self.main_area = ctk.CTkFrame(self.root, corner_radius=15, fg_color="#0F0F11")
@@ -208,6 +238,28 @@ class PrimDashboard:
         logger.info("Interrupt button clicked on dashboard GUI.")
         if self.interrupt_callback:
             self.interrupt_callback()
+
+    def _on_mute_mic_click(self):
+        self.mic_muted = not self.mic_muted
+        if self.mic_muted:
+            self.mute_mic_btn.configure(text="UNMUTE MIC", fg_color="#E53E3E", hover_color="#C53030")
+            self.add_log("Microphone muted.")
+        else:
+            self.mute_mic_btn.configure(text="MUTE MIC", fg_color="#2D3748", hover_color="#4A5568")
+            self.add_log("Microphone unmuted.")
+        if self.mute_mic_callback:
+            self.mute_mic_callback(self.mic_muted)
+
+    def _on_mute_voice_click(self):
+        self.voice_muted = not self.voice_muted
+        if self.voice_muted:
+            self.mute_voice_btn.configure(text="UNMUTE VOICE", fg_color="#E53E3E", hover_color="#C53030")
+            self.add_log("Voice output muted.")
+        else:
+            self.mute_voice_btn.configure(text="MUTE VOICE", fg_color="#2D3748", hover_color="#4A5568")
+            self.add_log("Voice output unmuted.")
+        if self.mute_voice_callback:
+            self.mute_voice_callback(self.voice_muted)
 
     def _on_text_submit(self, event=None):
         """Handles Enter key press or Send button click for typed text input."""

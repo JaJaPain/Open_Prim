@@ -123,6 +123,7 @@ class SpeechSynthesizer:
         self.voices_path = voices_path
         self.kokoro = None
         self.player = AudioPlayer()
+        self.muted = False
         
         self._ensure_models_exist()
         self._init_kokoro()
@@ -181,6 +182,10 @@ class SpeechSynthesizer:
 
     def generate_and_play(self, text: str):
         """Synthesizes text and plays it immediately."""
+        if self.muted:
+            logger.debug(f"Speech synthesizer is muted. Skipping playback of: '{text}'")
+            return
+
         if self.kokoro is None:
             logger.warning(f"TTS skipped (not initialized). Output: {text}")
             return

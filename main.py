@@ -75,6 +75,10 @@ class VoiceAssistant:
         self.listening_start_time = 0.0
         self.sleep_cooldown_until = 0.0  # Timestamp until which wake word detection is suppressed after speech
         
+        # Mute states
+        self.mic_muted = False
+        self.voice_muted = False
+        
         # Buffer to keep track of assistant speech for interruption logs
         self.spoken_text_buffer = ""
         self.current_user_query = ""
@@ -83,7 +87,9 @@ class VoiceAssistant:
         self.dashboard = PrimDashboard(
             interrupt_callback=self.trigger_manual_interrupt,
             close_callback=self.shutdown,
-            text_input_callback=self._handle_text_input
+            text_input_callback=self._handle_text_input,
+            mute_mic_callback=self._handle_mute_mic,
+            mute_voice_callback=self._handle_mute_voice
         )
         
         # Route logger records to GUI console
@@ -124,6 +130,7 @@ class VoiceAssistant:
         
         self.transcriber = AudioTranscriber()
         self.synthesizer = SpeechSynthesizer()
+        self.synthesizer.muted = self.voice_muted
         self.llm_client = OllamaLLMClient()
         
         duration = time.time() - start_time
@@ -137,6 +144,10 @@ class VoiceAssistant:
         # Convert to 1D and apply AGC
         chunk_1d = np.squeeze(indata)
         chunk_processed = self.agc.process(chunk_1d)
+        
+        if self.mic_muted:
+            chunk_processed = np.zeros_like(chunk_processed)
+            
         self.audio_queue.put(chunk_processed)
 
     def set_state(self, new_state: str):
@@ -152,6 +163,18 @@ class VoiceAssistant:
     def _handle_text_input(self, text: str):
         """Called from the GUI thread when user submits typed text. Queues it for the orchestration loop."""
         self.text_input_queue.put(text)
+
+    def _handle_mute_mic(self, muted: bool):
+        """Called from the GUI thread when user toggles microphone mute."""
+        self.mic_muted = muted
+        logger.info(f"Microphone mute state changed to: {muted}")
+
+    def _handle_mute_voice(self, muted: bool):
+        """Called from the GUI thread when user toggles voice output mute."""
+        self.voice_muted = muted
+        if self.synthesizer:
+            self.synthesizer.muted = muted
+        logger.info(f"Voice output mute state changed to: {muted}")
 
     def _play_thinking_filler(self, user_text: str):
         """Plays a brief spoken filler word based on user query keywords to reduce perceived latency."""

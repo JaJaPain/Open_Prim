@@ -139,6 +139,7 @@ class YourSkillClassName(BaseSkill):
     @property
     def filler_phrases(self) -> list:
         # Optional spoken phrases to play while this skill executes, keeping the user engaged.
+        # MUST be a list of static strings. Do not try to format parameters here as they are not available.
         return ["Turning that on now.", "One second, doing that."]
 
     def execute(self, **kwargs) -> str:
@@ -150,6 +151,52 @@ class YourSkillClassName(BaseSkill):
         except Exception as e:
             return f"Error: {e}"
 </skill_code>
+
+ACCESS TO ASSISTANT AUDIO & UI CHANNELS:
+The base class `BaseSkill` automatically provides two singletons to all skill instances.
+You MUST use them if you need to alert the user or log events in the background (e.g. when a timer, alarm, or long-running command finishes):
+
+1. `self.active_synthesizer`:
+   - Has a method `generate_and_play(text_to_speak: str)` which synthesizes text and plays it immediately.
+   - Use this to verbally notify the user when a background task completes.
+   - Example:
+     if self.active_synthesizer:
+         self.active_synthesizer.generate_and_play("Timer finished!")
+
+2. `self.active_dashboard`:
+   - Has `add_transcript(speaker: str, text: str)` to print lines to the conversation log dialogue panel.
+   - Has `add_log(message: str)` to append logs to the console window.
+   - Example:
+     if self.active_dashboard:
+         self.active_dashboard.add_transcript("Prim (Timer)", "(Timer finished!)")
+         self.active_dashboard.add_log("Timer alert triggered.")
+
+BACKGROUND TASKS & ALERTERS:
+If a skill needs a countdown or is long-running, always spawn a background thread (e.g. using `threading.Timer` or `threading.Thread`) so that `execute` can return immediately (confirming the action has started) and then notify the user via the audio/UI singletons when done.
+Example structure for a timer:
+```python
+        def alert():
+            # Play a system warning beep on Windows
+            import sys
+            if sys.platform == "win32":
+                import winsound
+                try:
+                    winsound.MessageBeep()
+                except Exception:
+                    pass
+            
+            announcement = "Countdown timer finished!"
+            if self.active_synthesizer:
+                self.active_synthesizer.generate_and_play(announcement)
+            if self.active_dashboard:
+                self.active_dashboard.add_transcript("Prim (Timer)", f"({announcement})")
+                self.active_dashboard.add_log(announcement)
+
+        # Convert minutes to seconds and start timer in background
+        import threading
+        timer_thread = threading.Timer(time_minutes * 60, alert)
+        timer_thread.start()
+```
 
 Rules:
 1. Ensure the code is syntactically valid and completely self-contained.

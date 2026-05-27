@@ -1,3 +1,4 @@
+import sys
 import os
 import importlib
 import inspect
@@ -21,7 +22,12 @@ def discover_skills() -> dict:
 
         module_name = f"skills.{filename[:-3]}"
         try:
-            module = importlib.import_module(module_name)
+            if module_name in sys.modules:
+                module = sys.modules[module_name]
+                importlib.reload(module)
+            else:
+                module = importlib.import_module(module_name)
+                
             for attr_name in dir(module):
                 attr = getattr(module, attr_name)
                 if (inspect.isclass(attr)
@@ -40,3 +46,27 @@ def discover_skills() -> dict:
 SKILL_INSTANCES = discover_skills()
 TOOLS_REGISTRY = {name: skill.execute for name, skill in SKILL_INSTANCES.items()}
 OLLAMA_TOOLS = [skill.to_ollama_tool() for skill in SKILL_INSTANCES.values()]
+
+def reload_skills():
+    """Dynamically reloads all skills and updates the global registries in-place."""
+    global SKILL_INSTANCES, TOOLS_REGISTRY, OLLAMA_TOOLS
+    logger.info("Reloading skills dynamically...")
+    
+    # Discover new skill set
+    new_instances = discover_skills()
+    
+    # Update SKILL_INSTANCES in-place
+    SKILL_INSTANCES.clear()
+    SKILL_INSTANCES.update(new_instances)
+    
+    # Update TOOLS_REGISTRY in-place
+    TOOLS_REGISTRY.clear()
+    for name, skill in SKILL_INSTANCES.items():
+        TOOLS_REGISTRY[name] = skill.execute
+        
+    # Update OLLAMA_TOOLS in-place
+    OLLAMA_TOOLS.clear()
+    OLLAMA_TOOLS.extend([skill.to_ollama_tool() for skill in SKILL_INSTANCES.values()])
+    
+    logger.info(f"Reload complete. Loaded {len(SKILL_INSTANCES)} skills.")
+

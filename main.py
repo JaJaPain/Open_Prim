@@ -89,7 +89,8 @@ class VoiceAssistant:
             close_callback=self.shutdown,
             text_input_callback=self._handle_text_input,
             mute_mic_callback=self._handle_mute_mic,
-            mute_voice_callback=self._handle_mute_voice
+            mute_voice_callback=self._handle_mute_voice,
+            create_skills_callback=self._handle_create_skills
         )
         
         # Route logger records to GUI console
@@ -175,6 +176,23 @@ class VoiceAssistant:
         if self.synthesizer:
             self.synthesizer.muted = muted
         logger.info(f"Voice output mute state changed to: {muted}")
+
+    def _handle_create_skills(self):
+        """Called from GUI thread when user wants to open the Skill Creator window."""
+        logger.info("Opening Skill Creator window...")
+        from ui.skill_creator import SkillCreatorWindow
+        
+        # Open the CTkToplevel window
+        creator_window = SkillCreatorWindow(
+            parent=self.dashboard.root,
+            llm_client=self.llm_client,
+            refresh_callback=self._on_skills_changed
+        )
+
+    def _on_skills_changed(self):
+        """Called when skills are created or deleted, updating local caches or logs."""
+        logger.info("Skills list changed. Refreshing dashboard logs...")
+        self.dashboard.add_log("Skills registry refreshed. Active skills list updated.")
 
     def _play_thinking_filler(self, user_text: str):
         """Plays a brief spoken filler word based on user query keywords to reduce perceived latency."""

@@ -3,7 +3,14 @@ __pycache__/
 *.pyc
 *.wav
 *.log
-storage/models/
-storage/memory/
+storage/
 .idea/
 .vscode/
+*.bin
+*.onnx
+*.pt
+*.pth
+*.pkl
+*.zip
+*.tar.gz
+

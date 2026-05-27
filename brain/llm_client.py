@@ -115,7 +115,7 @@ class OllamaLLMClient:
             # Select/filter tools based on the active mode
             tools_to_use = OLLAMA_TOOLS
             if mode == config.CODING_MODE:
-                workspace_tool_names = {"list_workspace_files", "read_workspace_file", "write_workspace_file"}
+                workspace_tool_names = {"list_workspace_files", "read_workspace_file", "write_workspace_file", "run_terminal_command"}
                 tools_to_use = [t for t in OLLAMA_TOOLS if t.get("function", {}).get("name") in workspace_tool_names]
             
             # Call Ollama chat stream

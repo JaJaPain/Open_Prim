@@ -134,6 +134,11 @@ class VoiceAssistant:
         self.synthesizer.muted = self.voice_muted
         self.llm_client = OllamaLLMClient()
         
+        # Register active objects in BaseSkill so all skills can access them
+        from skills.base_skill import BaseSkill
+        BaseSkill.active_synthesizer = self.synthesizer
+        BaseSkill.active_dashboard = self.dashboard
+        
         duration = time.time() - start_time
         logger.info(f"AI models initialized successfully in {duration:.2f}s.")
         self.dashboard.add_log("System fully ready! Listening for 'Prim' (or fallback wake word)...")

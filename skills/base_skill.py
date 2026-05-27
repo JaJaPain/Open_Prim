@@ -3,6 +3,8 @@ from typing import Dict, Any, List, Optional
 
 class BaseSkill(ABC):
     """Abstract base class for all Prim skills."""
+    active_synthesizer = None
+    active_dashboard = None
 
     @property
     @abstractmethod

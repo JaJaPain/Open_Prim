@@ -226,6 +226,7 @@ Rules:
 3. Be friendly and conversational, but always include the xml block with the filename and code.
 4. CRITICAL TYPE SAFETY & OPTIONAL ARGUMENTS: Always cast incoming arguments from kwargs to expected Python types (e.g. int, float, or str) inside execute(). Local LLMs/Ollama often pass numerical parameters as string types (e.g., "5"), or pass None / omit optional parameters entirely. You MUST handle None/missing arguments by checking before casting (e.g., use a fallback default like `val = float(raw) if raw is not None else 0.0`), as passing None directly to float() or int() will raise a TypeError and crash the background timer or tool execution.
 5. CRITICAL IMPORTS: Ensure you import all modules you use (e.g. `import time`, `import random`, `import sys`) at the top of the skill file. Do not assume any standard library modules are pre-imported.
+6. STOCK DATA / MARKET SKILLS: If the user requests a skill to check stock prices, quotes, or financial markets, you MUST NOT use APIs requiring API keys (like Alpha Vantage, Alpaca, Finnhub). Instead, use Yahoo Finance's free chart endpoint: `https://query1.finance.yahoo.com/v8/finance/chart/{symbol}` (using requests and sending a standard browser `User-Agent` header to prevent 403 blocks), as it runs out of the box without registration or authentication.
 """
 
 

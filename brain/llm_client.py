@@ -202,18 +202,76 @@ class OllamaLLMClient:
         loaded preferences, and conversation history.
         """
         from skills import SKILL_INSTANCES
+        import json
 
         # Load learned preferences from daily memory files
         preferences = memory_manager.load_preferences()
         
-        # Build tool descriptions dynamically
+        # Build tool descriptions dynamically with mock JSON examples
         tool_lines = []
         for i, skill in enumerate(SKILL_INSTANCES.values(), 1):
-            tool_lines.append(f"{i}. '{skill.name}': {skill.description}")
+            mock_args = {}
+            if skill.parameters and "properties" in skill.parameters:
+                props = skill.parameters["properties"]
+                # Use required fields, or fallback to first 2 properties if none required
+                required_fields = skill.parameters.get("required", list(props.keys())[:2])
+                for field in required_fields:
+                    if field in props:
+                        p_type = props[field].get("type", "string")
+                        if p_type in ["integer", "number"]:
+                            mock_args[field] = 5
+                        elif p_type == "boolean":
+                            mock_args[field] = True
+                        else:
+                            # Try to extract a clean string example from description
+                            if "location" in field:
+                                mock_args[field] = "Kokomo, Indiana"
+                            elif "symbol" in field or "ticker" in field:
+                                mock_args[field] = "PLTR"
+                            elif "query" in field:
+                                mock_args[field] = "Palantir"
+                            elif "preference" in field:
+                                mock_args[field] = "User lives in Kokomo, Indiana"
+                            else:
+                                mock_args[field] = "example_value"
+            
+            example_json = {
+                "name": skill.name,
+                "arguments": mock_args
+            }
+            example_str = json.dumps(example_json)
+            
+            tool_lines.append(
+                f"{i}. '{skill.name}': {skill.description}\n"
+                f"   Example: {example_str}"
+            )
+            
         tool_descriptions = "\n".join(tool_lines)
         
+        # Build critical rules dynamically for each loaded skill
+        critical_lines = []
+        for skill in SKILL_INSTANCES.values():
+            if skill.name == "save_preference":
+                critical_lines.append("- If the user shares a fact about themselves, you MUST use 'save_preference' to store it. Do not just say 'I will remember that' conversationally; output the JSON tool call block.")
+            elif skill.name == "fetch_weather":
+                critical_lines.append("- You MUST call 'fetch_weather' for any query about weather. Never claim you don't have access to weather data.")
+            elif skill.name == "fetch_news_headlines":
+                critical_lines.append("- You MUST call 'fetch_news_headlines' for any query, question, or updates about news, headlines, or current events. Never claim you don't have access to news updates.")
+            elif skill.name == "fetch_stock_ticker":
+                critical_lines.append("- You MUST call 'fetch_stock_ticker' for any query about stock prices, tickers, or financial markets.")
+            else:
+                # Dynamic rule for custom/user created skills
+                critical_lines.append(f"- You MUST call '{skill.name}' for any query or instruction related to: {skill.description}. Never say you performed the action or respond conversationally without outputting the JSON tool call.")
+        
+        # Add real-time event check general rule
+        critical_lines.append("- You MUST call a tool for any query about current/real-time events or requests requiring external information. Never claim you don't have access to real-time information.")
+        critical_rules = "\n".join(critical_lines)
+        
         # Format the system prompt template
-        system_prompt = config.LLM_SYSTEM_PROMPT_TEMPLATE.format(tool_descriptions=tool_descriptions)
+        system_prompt = config.LLM_SYSTEM_PROMPT_TEMPLATE.format(
+            tool_descriptions=tool_descriptions,
+            critical_rules=critical_rules
+        )
         if preferences:
             system_prompt += f"\n{preferences}"
             

@@ -231,6 +231,7 @@ class VoiceAssistant:
         # Build context messages and request LLM
         self.dashboard.add_log("Querying Qwen2.5 / Searching tools...")
         messages = self.llm_client.build_messages(user_text, self.memory_manager)
+        num_orig_messages = len(messages)
         
         # Get the stream generator from LLM
         token_stream = self.llm_client.chat_stream(messages)
@@ -294,7 +295,8 @@ class VoiceAssistant:
             self.manual_interrupt = False
         else:
             logger.info("Typed input interaction complete. Recording log turn.")
-            self.memory_manager.save_turn(self.current_user_query, full_response)
+            turn_messages = messages[num_orig_messages - 1:]
+            self.memory_manager.save_turn_messages(turn_messages)
             self.dashboard.add_transcript("Prim", full_response)
             time.sleep(0.5)
         
@@ -491,6 +493,7 @@ class VoiceAssistant:
                 # Build context messages and request LLM
                 self.dashboard.add_log("Querying Qwen2.5 / Searching tools...")
                 messages = self.llm_client.build_messages(user_text, self.memory_manager)
+                num_orig_messages = len(messages)
                 
                 # Get the stream generator from LLM
                 token_stream = self.llm_client.chat_stream(messages)
@@ -609,7 +612,8 @@ class VoiceAssistant:
                 else:
                     # Normal completion
                     logger.info("Interaction complete. Recording log turn.")
-                    self.memory_manager.save_turn(self.current_user_query, full_response)
+                    turn_messages = messages[num_orig_messages - 1:]
+                    self.memory_manager.save_turn_messages(turn_messages)
                     self.dashboard.add_transcript("Prim", full_response)
                     
                     # Post-speech cooldown to wait out hardware sound card buffer latency and echo

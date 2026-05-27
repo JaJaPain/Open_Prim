@@ -80,8 +80,8 @@ class MemoryManager:
                 # Extract conversation turns from the file
                 # In each file, turns are prepended (newest at the top of ## Conversation)
                 in_conversation = False
-                file_turns = []  # list of tuples: (user_msg, prim_msg)
-                current_user = None
+                turns_list = []  # list of lists of messages
+                current_turn = []
                 
                 for line in lines:
                     line = line.strip()
@@ -93,46 +93,62 @@ class MemoryManager:
                         continue
                     
                     if in_conversation:
-                        # Match: - **User**: text OR - **Prim**: text OR - **Prim (Interrupted)**: text
-                        match = re.match(r"^-\s*\*\*(User|Prim|Prim \(Interrupted\))\*\*:\s*(.*)$", line)
-                        if match:
-                            role_str = match.group(1)
-                            text = match.group(2).strip()
-                            role = "user" if role_str == "User" else "assistant"
+                        user_match = re.match(r"^-\s*\*\*(User)\*\*:\s*(.*)$", line)
+                        tool_call_match = re.match(r"^-\s*\*\*(Prim \(Tool Call\))\*\*:\s*(.*)$", line)
+                        tool_result_match = re.match(r"^-\s*\*\*(Tool Result)\*\*:\s*(.*)$", line)
+                        prim_match = re.match(r"^-\s*\*\*(Prim|Prim \(Interrupted\))\*\*:\s*(.*)$", line)
+                        
+                        msg = None
+                        is_user = False
+                        if user_match:
+                            msg = {"role": "user", "content": user_match.group(2).strip()}
+                            is_user = True
+                        elif tool_call_match:
+                            tc_text = tool_call_match.group(3).strip()
+                            try:
+                                import json
+                                tc_data = json.loads(tc_text)
+                                tool_calls = [{
+                                    "function": {
+                                        "name": tc_data.get("name"),
+                                        "arguments": tc_data.get("arguments", {})
+                                    }
+                                }]
+                            except Exception:
+                                tool_calls = []
+                            msg = {"role": "assistant", "content": "", "tool_calls": tool_calls}
+                        elif tool_result_match:
+                            msg = {"role": "tool", "content": tool_result_match.group(2).strip()}
+                        elif prim_match:
+                            msg = {"role": "assistant", "content": prim_match.group(2).strip()}
                             
-                            if role == "user":
-                                if current_user:
-                                    file_turns.append((current_user, None))
-                                current_user = {"role": "user", "content": text}
-                            else:  # role == "assistant"
-                                if current_user:
-                                    file_turns.append((current_user, {"role": "assistant", "content": text}))
-                                    current_user = None
-                                else:
-                                    file_turns.append((None, {"role": "assistant", "content": text}))
+                        if msg:
+                            if is_user:
+                                if current_turn:
+                                    turns_list.append(current_turn)
+                                current_turn = [msg]
+                            else:
+                                current_turn.append(msg)
                 
-                if current_user:
-                    file_turns.append((current_user, None))
+                if current_turn:
+                    turns_list.append(current_turn)
                 
-                # We want the newest turns first (which are at the start of file_turns)
+                # We want the newest turns first (which are at the start of turns_list)
                 # up to the remaining limit.
                 selected_turns = []
                 count = 0
-                for turn in file_turns:
-                    turn_msgs = [m for m in turn if m is not None]
+                for turn in turns_list:
                     needed = limit - len(turns)
-                    if count + len(turn_msgs) <= needed:
+                    if count + len(turn) <= needed:
                         selected_turns.append(turn)
-                        count += len(turn_msgs)
+                        count += len(turn)
                     else:
                         break
                 
                 # Convert the selected turns back to chronological order (oldest of selected turns first)
                 flat_msgs = []
                 for turn in reversed(selected_turns):
-                    for msg in turn:
-                        if msg is not None:
-                            flat_msgs.append(msg)
+                    flat_msgs.extend(turn)
                 
                 # Prepend the older file's turns before the newer ones
                 turns = flat_msgs + turns
@@ -140,6 +156,80 @@ class MemoryManager:
                 logger.error(f"Error reading context from {file_path}: {e}")
 
         return turns
+
+    def save_turn_messages(self, turn_messages: list):
+        """Saves a complete conversation turn, including any intermediate tool calls and tool results, to the markdown file."""
+        self._init_current_file()  # Ensure file exists
+        if not turn_messages:
+            return
+            
+        try:
+            # Read current content
+            with open(self.current_file, "r", encoding="utf-8") as f:
+                content = f.read()
+
+            # Find '## Conversation' and inject the turn right after it
+            conv_header = "## Conversation\n"
+            idx = content.find(conv_header)
+            if idx != -1:
+                insert_pos = idx + len(conv_header)
+                
+                # Format each message in the turn
+                formatted_lines = []
+                for msg in turn_messages:
+                    role = msg.get("role")
+                    content_str = msg.get("content", "")
+                    
+                    if role == "user":
+                        formatted_lines.append(f"- **User**: {content_str}")
+                    elif role == "tool":
+                        formatted_lines.append(f"- **Tool Result**: {content_str}")
+                    elif role == "assistant":
+                        tool_calls = msg.get("tool_calls", [])
+                        if tool_calls:
+                            # Save first tool call's name and arguments as a simple JSON string
+                            import json
+                            tc = tool_calls[0]
+                            tc_func = tc.get("function", {})
+                            tc_data = {
+                                "name": tc_func.get("name"),
+                                "arguments": tc_func.get("arguments", {})
+                            }
+                            formatted_lines.append(f"- **Prim (Tool Call)**: {json.dumps(tc_data)}")
+                        elif content_str.strip():
+                            formatted_lines.append(f"- **Prim**: {content_str.strip()}")
+                
+                new_turn = "\n".join(formatted_lines) + "\n"
+                updated_content = content[:insert_pos] + new_turn + content[insert_pos:]
+                
+                with open(self.current_file, "w", encoding="utf-8") as f:
+                    f.write(updated_content)
+                logger.info("Saved complete turn (with tool messages) to memory.")
+            else:
+                # Appending fallback
+                with open(self.current_file, "a", encoding="utf-8") as f:
+                    for msg in turn_messages:
+                        role = msg.get("role")
+                        content_str = msg.get("content", "")
+                        if role == "user":
+                            f.write(f"- **User**: {content_str}\n")
+                        elif role == "tool":
+                            f.write(f"- **Tool Result**: {content_str}\n")
+                        elif role == "assistant":
+                            tool_calls = msg.get("tool_calls", [])
+                            if tool_calls:
+                                import json
+                                tc = tool_calls[0]
+                                tc_func = tc.get("function", {})
+                                tc_data = {
+                                    "name": tc_func.get("name"),
+                                    "arguments": tc_func.get("arguments", {})
+                                }
+                                f.write(f"- **Prim (Tool Call)**: {json.dumps(tc_data)}\n")
+                            elif content_str.strip():
+                                f.write(f"- **Prim**: {content_str.strip()}\n")
+        except Exception as e:
+            logger.error(f"Error saving turn messages: {e}")
 
     def save_turn(self, user_text: str, assistant_text: str):
         """Saves a standard conversation turn to the markdown file."""

@@ -1,9 +1,8 @@
-import logging
-import threading
-import sys
-from skills.base_skill import BaseSkill
 
-logger = logging.getLogger("Prim.Skills.Timer")
+import logging
+from skills.base_skill import BaseSkill
+import threading
+import time
 
 class TimerSkill(BaseSkill):
     @property
@@ -12,73 +11,62 @@ class TimerSkill(BaseSkill):
 
     @property
     def description(self) -> str:
-        return "Set a timer for X amount of time (in minutes) and specify an action to perform upon completion."
+        return "Set a timer for a specified duration. For example, 'Set timer for 5 minutes and 30 seconds'."
 
     @property
     def parameters(self) -> dict:
         return {
             "type": "object",
             "properties": {
-                "time_minutes": {
+                "duration_minutes": {
                     "type": "number",
                     "description": "The duration of the timer in minutes"
                 },
-                "action": {
-                    "type": "string",
-                    "description": "Action to perform when the timer ends (e.g., 'turn off light')"
+                "duration_seconds": {
+                    "type": "number",
+                    "description": "The duration of the timer in seconds (optional)"
                 }
             },
-            "required": ["time_minutes", "action"]
+            "required": ["duration_minutes"]
         }
 
     @property
     def filler_keywords(self) -> list:
-        return [
-            "timer", 
-            "alarm", 
-            "set a timer", 
-            "start a timer", 
-            "create a timer"
-        ]
+        return ["timer", "set timer"]
 
     @property
     def filler_phrases(self) -> list:
-        return [
-            "Setting a timer for you.",
-            "Got it, starting the countdown.",
-            "One second, setting the timer."
-        ]
+        return ["Setting that up.", "Timer started."]
 
     def execute(self, **kwargs) -> str:
-        time_minutes = kwargs.get('time_minutes', 0)
-        action = kwargs.get('action', '')
-        
-        if time_minutes <= 0:
-            return "Error: Please provide a valid duration greater than zero."
+        duration_minutes = kwargs.get("duration_minutes")
+        duration_seconds = kwargs.get("duration_seconds", 0)
+
+        if not duration_minutes and not duration_seconds:
+            return "Please specify a duration for the timer."
+
+        try:
+            duration_minutes = float(duration_minutes)
+            duration_seconds = float(duration_seconds)
+        except (ValueError, TypeError):
+            return "Invalid duration. Please provide valid numbers of minutes and seconds."
+
+        total_duration = duration_minutes * 60 + duration_seconds
+
+        announcement = f"Timer set for {duration_minutes} minutes and {duration_seconds} seconds."
+        self.active_synthesizer.generate_and_play(announcement)
+        self.active_dashboard.add_transcript("Prim (Timer)", f"({announcement})")
 
         def alert():
-            logger.info(f"Timer done! Action triggered: {action}")
-            announcement = f"Timer finished! Action: {action}"
-            
-            # 1. Play winsound on Windows
-            if sys.platform == "win32":
-                import winsound
-                try:
-                    winsound.MessageBeep()
-                except Exception:
-                    pass
-            
-            # 2. TTS announcement
+            finish_time = time.strftime("%H:%M", time.localtime())
+            announcement = f"Timer finished! It will be done at {finish_time}."
             if self.active_synthesizer:
                 self.active_synthesizer.generate_and_play(announcement)
-                
-            # 3. Log and display in UI
             if self.active_dashboard:
                 self.active_dashboard.add_transcript("Prim (Timer)", f"({announcement})")
-                self.active_dashboard.add_log(f"Timer Finished: {action}")
+                self.active_dashboard.add_log(announcement)
 
-        # Start timer in background (minutes to seconds)
-        timer_thread = threading.Timer(time_minutes * 60, alert)
+        timer_thread = threading.Timer(total_duration, alert)
         timer_thread.start()
-        
-        return "Timer set for {} minutes. Action: {}".format(time_minutes, action)
+
+        return "Timer started. You will be notified when it's done."

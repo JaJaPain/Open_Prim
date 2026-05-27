@@ -258,7 +258,9 @@ class OllamaLLMClient:
             elif skill.name == "fetch_news_headlines":
                 critical_lines.append("- You MUST call 'fetch_news_headlines' for any query, question, or updates about news, headlines, or current events. Never claim you don't have access to news updates.")
             elif skill.name == "fetch_stock_ticker":
-                critical_lines.append("- You MUST call 'fetch_stock_ticker' for any query about stock prices, tickers, or financial markets.")
+                critical_lines.append("- You MUST call 'fetch_stock_ticker' for queries about a single specific stock ticker symbol (e.g., 'What is Apple's stock price?').")
+            elif skill.name == "check_stocks":
+                critical_lines.append("- You MUST call 'check_stocks' (with empty arguments `{}`) for general queries about checking stocks, the market, or watchlist when no single specific stock symbol is requested (e.g., 'check stocks', 'how is the market today').")
             else:
                 # Dynamic rule for custom/user created skills
                 critical_lines.append(f"- You MUST call '{skill.name}' for any query or instruction related to: {skill.description}. Never say you performed the action or respond conversationally without outputting the JSON tool call.")

@@ -72,6 +72,7 @@ class VoiceAssistant:
         self.interrupted = False
         self.manual_interrupt = False
         self.listening_start_time = 0.0
+        self.sleep_cooldown_until = 0.0  # Timestamp until which wake word detection is suppressed after speech
         
         # Buffer to keep track of assistant speech for interruption logs
         self.spoken_text_buffer = ""
@@ -220,7 +221,9 @@ class VoiceAssistant:
         consecutive_user_speech_frames = 0
         
         # Punctuation separator for TTS segmentation
-        sentence_end_re = re.compile(r"([.,?!;\n]+)")
+        # Only split on sentence-ending punctuation followed by whitespace.
+        # This prevents splitting decimal numbers like "79.4" or "5.4 mph".
+        sentence_end_re = re.compile(r"([.?!;]+(?=\s)|\n+)")
 
         while not self.stop_event.is_set():
             # Flush state controls
@@ -246,6 +249,11 @@ class VoiceAssistant:
 
             # State Machine: SLEEPING (Listening for Wake Word)
             if self.state == "SLEEPING":
+                # Post-speech cooldown: consume mic audio but skip wake word detection
+                # to prevent Prim's own echo from triggering phantom interactions.
+                if time.time() < self.sleep_cooldown_until:
+                    continue
+                
                 # openWakeWord expects 1280 sample frames (80ms at 16kHz)
                 wakeword_buffer = np.concatenate((wakeword_buffer, chunk_1d))
                 
@@ -487,6 +495,9 @@ class VoiceAssistant:
                             self.audio_queue.get_nowait()
                         except queue.Empty:
                             break
+                    
+                    # Set a 2-second cooldown so Prim's echo doesn't re-trigger the wake word
+                    self.sleep_cooldown_until = time.time() + 2.0
 
             # State Machine: SPEAKING (Passive placeholder, handled in THINKING logic for thread sync)
             elif self.state == "SPEAKING":

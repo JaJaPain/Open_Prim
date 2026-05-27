@@ -1,3 +1,4 @@
+
 import logging
 from skills.base_skill import BaseSkill
 import webbrowser
@@ -9,7 +10,7 @@ class PlayMusicSkill(BaseSkill):
 
     @property
     def description(self) -> str:
-        return "Opens the default web browser to play the user's music playlist (e.g. YouTube Music, Spotify)."
+        return "Opens the default web browser to play a specific YouTube Music playlist."
 
     @property
     def parameters(self) -> dict:
@@ -25,8 +26,8 @@ class PlayMusicSkill(BaseSkill):
 
     def execute(self, **kwargs) -> str:
         try:
-            # Replace this URL with your actual YouTube Music playlist address!
-            playlist_url = "https://music.youtube.com" 
+            # URL of the specific YouTube Music playlist you want to open
+            playlist_url = "https://www.youtube.com/watch?v=yuDoflxzuB8&list=PLJwdq99HSFXjwAdk3l6v_8pPS8uqlWMEP"
             webbrowser.open(playlist_url)
             return f"Opened default web browser to {playlist_url} to play your music."
         except Exception as e:

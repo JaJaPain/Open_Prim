@@ -18,13 +18,15 @@ if ctk is not None:
     ctk.set_default_color_theme("blue")
 
 class PrimDashboard:
-    def __init__(self, interrupt_callback=None, close_callback=None, text_input_callback=None, mute_mic_callback=None, mute_voice_callback=None, create_skills_callback=None):
+    def __init__(self, interrupt_callback=None, close_callback=None, text_input_callback=None, mute_mic_callback=None, mute_voice_callback=None, create_skills_callback=None, mode_callback=None, workspace_callback=None):
         self.interrupt_callback = interrupt_callback
         self.close_callback = close_callback
         self.text_input_callback = text_input_callback
         self.mute_mic_callback = mute_mic_callback
         self.mute_voice_callback = mute_voice_callback
         self.create_skills_callback = create_skills_callback
+        self.mode_callback = mode_callback
+        self.workspace_callback = workspace_callback
         self.root = None
         self.mic_muted = False
         self.voice_muted = False
@@ -61,7 +63,7 @@ class PrimDashboard:
         # ----------------- SIDEBAR PANEL (Status) -----------------
         self.sidebar = ctk.CTkFrame(self.root, width=220, corner_radius=15, fg_color="#131317")
         self.sidebar.grid(row=0, column=0, padx=15, pady=15, sticky="nsew")
-        self.sidebar.grid_rowconfigure(7, weight=1)
+        self.sidebar.grid_rowconfigure(10, weight=1)
         
         # Title
         self.title_label = ctk.CTkLabel(
@@ -152,6 +154,39 @@ class PrimDashboard:
             height=36
         )
         self.create_skills_btn.grid(row=6, column=0, padx=15, pady=(0, 10), sticky="ew")
+
+        # Mode Switch
+        self.mode_switch = ctk.CTkSwitch(
+            self.sidebar,
+            text="CODING MODE",
+            command=self._on_mode_switch,
+            font=ctk.CTkFont(size=12, weight="bold"),
+            progress_color="#00B4D8"
+        )
+        self.mode_switch.grid(row=7, column=0, padx=15, pady=(10, 10), sticky="w")
+
+        # Select Workspace Button
+        self.select_workspace_btn = ctk.CTkButton(
+            self.sidebar,
+            text="SELECT WORKSPACE",
+            command=self._on_select_workspace,
+            font=ctk.CTkFont(size=12, weight="bold"),
+            fg_color="#4A5568",
+            hover_color="#718096",
+            corner_radius=10,
+            height=36
+        )
+        self.select_workspace_btn.grid(row=8, column=0, padx=15, pady=(0, 5), sticky="ew")
+
+        # Workspace Label
+        self.workspace_label = ctk.CTkLabel(
+            self.sidebar,
+            text="Workspace: None",
+            font=ctk.CTkFont(family="Helvetica", size=11),
+            text_color="#718096",
+            wraplength=190
+        )
+        self.workspace_label.grid(row=9, column=0, padx=15, pady=(0, 10), sticky="w")
         
         # Audio input indicator placeholder
         self.vad_label = ctk.CTkLabel(
@@ -160,7 +195,7 @@ class PrimDashboard:
             font=ctk.CTkFont(family="Courier", size=12),
             text_color="#718096"
         )
-        self.vad_label.grid(row=8, column=0, padx=10, pady=20, sticky="s")
+        self.vad_label.grid(row=11, column=0, padx=10, pady=20, sticky="s")
         
         # ----------------- MAIN CONTENT AREA -----------------
         self.main_area = ctk.CTkFrame(self.root, corner_radius=15, fg_color="#0F0F11")
@@ -290,6 +325,26 @@ class PrimDashboard:
         if self.text_input_callback:
             self.text_input_callback(text)
 
+    def _on_mode_switch(self):
+        import os
+        is_coding = self.mode_switch.get() == 1
+        new_mode = config.CODING_MODE if is_coding else config.ASSISTANT_MODE
+        self.add_log(f"Mode changed to: {new_mode}")
+        if self.mode_callback:
+            self.mode_callback(new_mode)
+
+    def _on_select_workspace(self):
+        import os
+        from tkinter import filedialog
+        path = filedialog.askdirectory(title="Select Coding Workspace")
+        if path:
+            path = os.path.abspath(path).replace("\\", "/")
+            folder_name = os.path.basename(path) or path
+            self.workspace_label.configure(text=f"Workspace: {folder_name}")
+            self.add_log(f"Active workspace folder set to: {path}")
+            if self.workspace_callback:
+                self.workspace_callback(path)
+
     def _on_closing(self):
         """Cleans up threads when closing the window."""
         logger.info("Closing dashboard...")
@@ -301,6 +356,21 @@ class PrimDashboard:
 
     # ----------------- Thread-Safe UI Update Hooks -----------------
     
+    def update_workspace_display(self, path: str):
+        """Thread-safe update of workspace label."""
+        if self.root is None:
+            return
+        import os
+        folder_name = os.path.basename(path) or path
+        self.root.after(0, lambda: self.workspace_label.configure(text=f"Workspace: {folder_name}"))
+
+    def update_mode_display(self, mode: str):
+        """Thread-safe update of mode switch state."""
+        if self.root is None:
+            return
+        is_coding = 1 if mode == config.CODING_MODE else 0
+        self.root.after(0, lambda: self.mode_switch.select() if is_coding else self.mode_switch.deselect())
+
     def set_status(self, status: str):
         """Thread-safe update of assistant state."""
         if self.root is None:

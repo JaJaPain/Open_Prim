@@ -97,7 +97,7 @@ class OllamaLLMClient:
         return []
 
 
-    def chat_stream(self, messages: list):
+    def chat_stream(self, messages: list, mode: str = "ASSISTANT"):
         """
         Sends messages to Ollama and streams the response text.
         If the model requests a tool/function call, runs the function and 
@@ -111,11 +111,18 @@ class OllamaLLMClient:
 
         try:
             logger.debug(f"Sending chat request to Ollama model '{config.LLM_MODEL}'")
+            
+            # Select/filter tools based on the active mode
+            tools_to_use = OLLAMA_TOOLS
+            if mode == config.CODING_MODE:
+                workspace_tool_names = {"list_workspace_files", "read_workspace_file", "write_workspace_file"}
+                tools_to_use = [t for t in OLLAMA_TOOLS if t.get("function", {}).get("name") in workspace_tool_names]
+            
             # Call Ollama chat stream
             response = self.client.chat(
                 model=config.LLM_MODEL,
                 messages=messages,
-                tools=OLLAMA_TOOLS,
+                tools=tools_to_use,
                 stream=True,
                 options={"temperature": 0.1}
             )
@@ -190,13 +197,13 @@ class OllamaLLMClient:
                     })
                 
                 # Recursive call to stream final summary
-                yield from self.chat_stream(messages)
+                yield from self.chat_stream(messages, mode=mode)
                 
         except Exception as e:
             logger.error(f"Error during Ollama chat: {e}")
             yield f"Error in LLM: {str(e)}"
 
-    def build_messages(self, user_query: str, memory_manager) -> list:
+    def build_messages(self, user_query: str, memory_manager, mode: str = "ASSISTANT") -> list:
         """
         Builds the message list including system prompts,
         loaded preferences, and conversation history.
@@ -269,11 +276,17 @@ class OllamaLLMClient:
         critical_lines.append("- You MUST call a tool for any query about current/real-time events or requests requiring external information. Never claim you don't have access to real-time information.")
         critical_rules = "\n".join(critical_lines)
         
-        # Format the system prompt template
-        system_prompt = config.LLM_SYSTEM_PROMPT_TEMPLATE.format(
-            tool_descriptions=tool_descriptions,
-            critical_rules=critical_rules
-        )
+        # Format the system prompt template based on active mode
+        if mode == config.CODING_MODE:
+            system_prompt = config.LLM_CODING_SYSTEM_PROMPT_TEMPLATE.format(
+                tool_descriptions=tool_descriptions,
+                critical_rules=critical_rules
+            )
+        else:
+            system_prompt = config.LLM_SYSTEM_PROMPT_TEMPLATE.format(
+                tool_descriptions=tool_descriptions,
+                critical_rules=critical_rules
+            )
         if preferences:
             system_prompt += f"\n{preferences}"
             

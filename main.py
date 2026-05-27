@@ -79,6 +79,10 @@ class VoiceAssistant:
         self.mic_muted = False
         self.voice_muted = False
         
+        # Mode and Workspace state
+        self.mode = config.ASSISTANT_MODE
+        self.workspace = None
+        
         # Buffer to keep track of assistant speech for interruption logs
         self.spoken_text_buffer = ""
         self.current_user_query = ""
@@ -90,7 +94,9 @@ class VoiceAssistant:
             text_input_callback=self._handle_text_input,
             mute_mic_callback=self._handle_mute_mic,
             mute_voice_callback=self._handle_mute_voice,
-            create_skills_callback=self._handle_create_skills
+            create_skills_callback=self._handle_create_skills,
+            mode_callback=self._handle_mode_change,
+            workspace_callback=self._handle_workspace_change
         )
         
         # Route logger records to GUI console
@@ -182,6 +188,18 @@ class VoiceAssistant:
             self.synthesizer.muted = muted
         logger.info(f"Voice output mute state changed to: {muted}")
 
+    def _handle_mode_change(self, mode: str):
+        """Called from the GUI thread when user toggles coding mode switch."""
+        self.mode = mode
+        logger.info(f"Assistant mode switched to: {mode}")
+
+    def _handle_workspace_change(self, path: str):
+        """Called from the GUI thread when user selects active coding workspace folder."""
+        self.workspace = path
+        from skills.base_skill import BaseSkill
+        BaseSkill.active_workspace = path
+        logger.info(f"Active workspace directory updated to: {path}")
+
     def _handle_create_skills(self):
         """Called from GUI thread when user wants to open the Skill Creator window."""
         logger.info("Opening Skill Creator window...")
@@ -225,16 +243,43 @@ class VoiceAssistant:
         
         self.set_state("THINKING")
         
+        # Coding mode specific prompt + bypass speech output
+        if self.mode == config.CODING_MODE:
+            self.dashboard.add_log("Querying Qwen2.5 (Coding Mode)...")
+            messages = self.llm_client.build_messages(user_text, self.memory_manager, mode=self.mode)
+            num_orig_messages = len(messages)
+            
+            token_stream = self.llm_client.chat_stream(messages, mode=self.mode)
+            
+            full_response = ""
+            for token in token_stream:
+                if self.manual_interrupt:
+                    break
+                full_response += token
+                
+            if self.manual_interrupt:
+                self._handle_interruption("Manual Interrupt Button Click")
+                self.manual_interrupt = False
+            else:
+                logger.info("Coding mode interaction complete. Recording log turn.")
+                messages.append({"role": "assistant", "content": full_response})
+                turn_messages = messages[num_orig_messages - 1:]
+                self.memory_manager.save_turn_messages(turn_messages)
+                self.dashboard.add_transcript("Prim", full_response)
+                
+            self.set_state("SLEEPING")
+            return
+            
         # Play thinking filler if query requires tool execution
         self._play_thinking_filler(user_text)
         
         # Build context messages and request LLM
         self.dashboard.add_log("Querying Qwen2.5 / Searching tools...")
-        messages = self.llm_client.build_messages(user_text, self.memory_manager)
+        messages = self.llm_client.build_messages(user_text, self.memory_manager, mode=self.mode)
         num_orig_messages = len(messages)
         
         # Get the stream generator from LLM
-        token_stream = self.llm_client.chat_stream(messages)
+        token_stream = self.llm_client.chat_stream(messages, mode=self.mode)
         
         # Stream iteration logic
         self.spoken_text_buffer = ""
@@ -374,6 +419,16 @@ class VoiceAssistant:
             except queue.Empty:
                 pass
 
+            # Bypass wake word and speech recognition in Coding Mode
+            if self.mode == config.CODING_MODE:
+                while not self.audio_queue.empty():
+                    try:
+                        self.audio_queue.get_nowait()
+                    except queue.Empty:
+                        break
+                time.sleep(0.05)
+                continue
+
             try:
                 # Retrieve float32 audio chunk (already processed by AGC)
                 chunk_1d = self.audio_queue.get(timeout=0.05)
@@ -506,11 +561,11 @@ class VoiceAssistant:
                 
                 # Build context messages and request LLM
                 self.dashboard.add_log("Querying Qwen2.5 / Searching tools...")
-                messages = self.llm_client.build_messages(user_text, self.memory_manager)
+                messages = self.llm_client.build_messages(user_text, self.memory_manager, mode=self.mode)
                 num_orig_messages = len(messages)
                 
                 # Get the stream generator from LLM
-                token_stream = self.llm_client.chat_stream(messages)
+                token_stream = self.llm_client.chat_stream(messages, mode=self.mode)
                 
                 # Stream iteration logic
                 self.spoken_text_buffer = ""

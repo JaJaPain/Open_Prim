@@ -5,6 +5,7 @@ class BaseSkill(ABC):
     """Abstract base class for all Prim skills."""
     active_synthesizer = None
     active_dashboard = None
+    active_workspace = None
 
     @property
     @abstractmethod

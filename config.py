@@ -53,7 +53,7 @@ OUTPUT_CHANNELS = 1
 # Wake Word Settings
 WAKE_WORD_MODEL = "alexa"  # Fallback built-in model; we can also look for custom ONNX
 WAKE_WORD_THRESHOLD = 0.65
-WAKE_WORD_INTERRUPT_THRESHOLD = 0.93  # Higher threshold to prevent false triggers while assistant is speaking
+WAKE_WORD_INTERRUPT_THRESHOLD = 1.0  # Set to 1.0 or higher to disable voice interruption (physical button only)
 CUSTOM_WAKE_WORD_PATH = os.path.join(MODELS_DIR, "prim.onnx")
 
 # VAD Settings

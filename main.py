@@ -543,25 +543,26 @@ class VoiceAssistant:
                     text_accumulator += token
                     
                     # Interruption check: While LLM generates, the mic thread is active.
-                    # We run openWakeWord on mic chunks to detect wake word interruption
-                    while not self.audio_queue.empty():
-                        try:
-                            mic_chunk_1d = self.audio_queue.get_nowait()
-                            
-                            # Accumulate in wake word buffer
-                            wakeword_buffer = np.concatenate((wakeword_buffer, mic_chunk_1d))
-                            while len(wakeword_buffer) >= 1280:
-                                ww_chunk = wakeword_buffer[:1280]
-                                wakeword_buffer = wakeword_buffer[1280:]
+                    # We run openWakeWord on mic chunks to detect wake word interruption (disabled if threshold >= 1.0)
+                    if config.WAKE_WORD_INTERRUPT_THRESHOLD < 1.0:
+                        while not self.audio_queue.empty():
+                            try:
+                                mic_chunk_1d = self.audio_queue.get_nowait()
                                 
-                                ww_chunk_int16 = (ww_chunk * 32767.0).astype(np.int16)
-                                if self.wake_word_detector.process(ww_chunk_int16, threshold=config.WAKE_WORD_INTERRUPT_THRESHOLD):
-                                    logger.info("Wake word override detected during generation! Interrupting...")
-                                    self.dashboard.add_log("Vocal interruption detected (wake word override during generation)...")
-                                    self.interrupted = True
-                                    break
-                        except queue.Empty:
-                            break
+                                # Accumulate in wake word buffer
+                                wakeword_buffer = np.concatenate((wakeword_buffer, mic_chunk_1d))
+                                while len(wakeword_buffer) >= 1280:
+                                    ww_chunk = wakeword_buffer[:1280]
+                                    wakeword_buffer = wakeword_buffer[1280:]
+                                    
+                                    ww_chunk_int16 = (ww_chunk * 32767.0).astype(np.int16)
+                                    if self.wake_word_detector.process(ww_chunk_int16, threshold=config.WAKE_WORD_INTERRUPT_THRESHOLD):
+                                        logger.info("Wake word override detected during generation! Interrupting...")
+                                        self.dashboard.add_log("Vocal interruption detected (wake word override during generation)...")
+                                        self.interrupted = True
+                                        break
+                            except queue.Empty:
+                                break
                     
                     if self.interrupted:
                         break

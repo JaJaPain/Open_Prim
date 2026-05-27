@@ -291,7 +291,8 @@ class VoiceAssistant:
         
         # Handle interruption or normal completion
         if self.interrupted or self.manual_interrupt:
-            self._handle_interruption()
+            reason = "Manual Interrupt Button Click" if self.manual_interrupt else "Wake Word Override"
+            self._handle_interruption(reason)
             self.manual_interrupt = False
         else:
             logger.info("Typed input interaction complete. Recording log turn.")
@@ -349,7 +350,7 @@ class VoiceAssistant:
         while not self.stop_event.is_set():
             # Flush state controls
             if self.manual_interrupt:
-                self._handle_interruption()
+                self._handle_interruption("Manual Interrupt Button Click")
                 self.manual_interrupt = False
                 
                 # Force transition to Listening
@@ -556,6 +557,7 @@ class VoiceAssistant:
                                 ww_chunk_int16 = (ww_chunk * 32767.0).astype(np.int16)
                                 if self.wake_word_detector.process(ww_chunk_int16, threshold=config.WAKE_WORD_INTERRUPT_THRESHOLD):
                                     logger.info("Wake word override detected during generation! Interrupting...")
+                                    self.dashboard.add_log("Vocal interruption detected (wake word override during generation)...")
                                     self.interrupted = True
                                     break
                         except queue.Empty:
@@ -602,6 +604,7 @@ class VoiceAssistant:
                             ww_chunk_int16 = (ww_chunk * 32767.0).astype(np.int16)
                             if self.wake_word_detector.process(ww_chunk_int16, threshold=config.WAKE_WORD_INTERRUPT_THRESHOLD):
                                 logger.info("Wake word override detected during audio playback! Interrupting...")
+                                self.dashboard.add_log("Vocal interruption detected (wake word override during audio playback)...")
                                 self.interrupted = True
                                 break
                     except queue.Empty:
@@ -609,7 +612,8 @@ class VoiceAssistant:
                 
                 # Handle Interruption Execution
                 if self.interrupted or self.manual_interrupt:
-                    self._handle_interruption()
+                    reason = "Manual Interrupt Button Click" if self.manual_interrupt else "Wake Word Override"
+                    self._handle_interruption(reason)
                     self.manual_interrupt = False
                     
                     # Instantly return to LISTENING state to catch user speech
@@ -649,9 +653,9 @@ class VoiceAssistant:
                 # Loop safety fallback
                 time.sleep(0.1)
 
-    def _handle_interruption(self):
+    def _handle_interruption(self, reason: str = "Unknown"):
         """Core Immediate Flush Protocol execution."""
-        logger.info("Executing Immediate Flush Protocol...")
+        logger.info(f"Executing Immediate Flush Protocol due to: {reason}...")
         
         # 1. Stop active audio synthesis and soundcard stream instantly
         if self.synthesizer:
@@ -669,14 +673,14 @@ class VoiceAssistant:
                 
         # 2. Get spoken text up to this instant
         spoken_text = self.spoken_text_buffer.strip()
-        logger.info(f"User interrupted assistant speech. Spoken text was: '{spoken_text}'")
+        logger.info(f"User interrupted assistant speech. Reason: {reason}. Spoken text was: '{spoken_text}'")
         
         # 3. Log the interrupted state to the session markdown file
         self.memory_manager.save_interrupted_turn(self.current_user_query, spoken_text)
         
         # 4. Display interrupted response in GUI
         self.dashboard.add_transcript("Prim (Interrupted)", f"{spoken_text}...")
-        self.dashboard.add_log("USER INTERRUPTED - Purged speech pipeline instantly.")
+        self.dashboard.add_log(f"USER INTERRUPTED ({reason}) - Purged speech pipeline instantly.")
 
     def shutdown(self):
         """Gracefully terminates audio, UI, and helper worker threads."""
